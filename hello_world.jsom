@@ -1,0 +1,3 @@
+{
+ "echo_world": ["~| |>echo 'Hello world'<| -&#> VAR&V -S> VARE&V -€S> output.txt |~"]
+}

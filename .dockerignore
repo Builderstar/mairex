@@ -1,0 +1,68 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Documentation builds
+docs/_build/
+site/
+
+# Environment
+.env
+.venv
+env/
+venv/
+
+# API Keys and sensitive data
+API_keys.json
+
+# Generated files
+*.log
+*.html
+*.txt
+!requirements.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.jsom
+!basic_test.jsom
+!ai_test.jsom
+!test.jsom

@@ -1,0 +1,27 @@
+# Include documentation files
+include README.md
+include SYNTAX_REFERENCE.md
+include TUTORIAL.md
+include EXAMPLES.md
+include LICENSE
+
+# Include configuration files
+include pyproject.toml
+
+# Include example files
+include *.jsom
+
+# Exclude unnecessary files
+exclude API_keys.json
+exclude *.pyc
+exclude __pycache__
+exclude .git*
+exclude *.log
+exclude *.txt
+exclude *.html
+exclude *.md~
+
+# Exclude test and development files
+recursive-exclude tests *
+recursive-exclude __pycache__ *
+recursive-exclude *.egg-info *

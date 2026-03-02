@@ -1,0 +1,101 @@
+Jsom file format (for the Matrex programming language)
+
+Variable place holders:
+<$S> : A string variable place holder
+<$I> : An integer variable place holder
+<$L> : A list/array variable place holder
+
+Assignings:
+-> : *Base symbol for assigining value from the operation on the left the right
+	&# : data for output of operation (usually the output of the executed script)
+	&€ : data for content of operation (usually the content of a file or script)
+	&¤ : data for raw value of operation (usually the raw value of the written text in the jsom file)
+		&¤S: raw string value
+		&¤I: raw integer value
+		&¤L: raw list value
+	$S : passing string data as a variable to an operation
+	$I : passing integer data as a variable to an operation
+	$L : passing list/array data as a variable to an operation
+
+<- : *Base symbol for assigining value from the operation on the right to the left
+	&# : data for output of operation (usually the output of the executed script)
+	&€ : data for content of operation (usually the content of a file or script)
+	&= : data for content of operation json_data (usually the content of the referenced json_data)
+	&¤ : data for raw value of operation (usually the raw value of the written text in the jsom file)
+		&¤S: raw string value
+		&¤I: raw integer value
+		&¤L: raw list value
+	$S : passing string data as a variable to an operation
+	$I : passing integer data as a variable to an operation
+	$L : passing list/array data as a variable to an operation
+	[**Any variable type**] : passing a list/array of different types of data as a variable to an operation
+		
+##Example of basic assignings
+-&#> : Assign the output data from an operation on the left to the right
+<&€- : Assign the content data from an operation on the right to the left
+
+##Example of advanced assignings
+-&¤$I> : Assign the raw value data from an operation as an integer variable to the right from the left
+<&#$S- : Assign the output data from an operation as a string variable to the left from the right
+-[$S, $S, $I, $L]> : Assign a list/array of values from an operation as varaibles to the right from the left - **not developed yet
+
+Instruction variables:
+A& : The reference for the used AI model
+	&I: the input assignment (the entry to pass the data to the input field of the AI model)
+	&O: the output assignment (the entry where the output data of the AI model is located)
+	&D: the 'decision' assignment (the entry where the AI model from its output can make a decision about a provided list of data)
+	&M: the model assignment (the entry where you can define the used AI model)
+	&P: the prompt assignment (the entry to specify a specific user prompt for the AI model in the given field)
+	&S: the 'service' assignment (the entry to specify the provider of the ai models using the LiteLLM module)
+**Any combination of capital letters**& : A custom reference for a separate variable
+	&S: the script assignment (the entry to store a script in the varaible) - Functions will automatically extracted in to the &F function from this entry
+	&F: the 'function' assignment (the entry where a function can be chosen to be executed from a list | useful for accessing certain functions from a script that was stored in the variable)
+	&J: the 'json' assignment (the entry where a json value can be chosen | useful for accessing certain json data from a json that was stored in a variable) - **not developed yet
+	&V: the value assignment (the entry for the value the variable holds - independent from the data type)
+	&P: the picture assignment (the entry where a raw image data can be stored or accessed) | useful for projects with image generation or image manipulation
+
+Command variables:
+&= : The reference for the json data value (It can only reference to the command with a json output on the line)
+
+Instruction symbols:
+|>**Any reference or plain text**<| : The string that gets added to the shell (These are the raw texts that gets pasted in the terminal and executed at the end of the command)
+(> |>**Any reference or plain text**<|, |>**Any reference or plain text**<| <) : Multiple separate strings that gets added to the same shell command (These are the raw texts that gets pasted in the terminal and executed at the end of the command)
+(**Any continuation of a json access**) : Multiple data value accesses executed sequantially (Useful for accesing and executing multiple values from the same tree on different branches) - **not developed yet
+[**Any continuation of a json access**] : Multiple data value accesses executed parallel (Useful for viewing multiple values from the same tree on different branches) - **not developed yet
+
+Json array operations:
+ˇ: or (either the default (first in order) or the one specified in command call) **not developed yet
+^: and **not developed yet
+**array value**$ : The place the variable will be passed on **not developed yet
+
+Execution logics:
+[(**Any command**, **Any command**)] : Multiple commands executed sequantially in a single function
+[**Any command**, **Any command**] : Multiple commands executed in separate shells at the certain function (useful for parallel tool use with AI too)
+
+**not developed yet:
+Branch: 
+"**Any reference with a decision**&D" ; **Any json access to a field.-ß>** ˇ **Any json access to a field.-ß>** : Execute the command in the specified field and continue main execution from there
+"**Any reference with a decision**&D" ; **Any json access to a field.-ß|** ˇ **Any json access to a field.-ß|** : Execute the command in the specified field and continue main execution from the invoker step
+"**Any reference with a decision**&D" ; **Any json access to a field.-ß<** ˇ **Any json access to a field.-ß<** : Execute the command in the specified field and start main execution from the first step until it reaches there
+"**Any reference with a decision**&D" ; **Any json access to a field.-ß** ˇ **Any json access to a field.-ß<** : Execute the command in the specified field and start main execution from the begining
+Loop:
+**Any json access to a command**.-@> : Execute all the functions with all the commands in the step and continue main execution from there
+**Any json access to a command**.-@| : Execute all the functions with all the commands in the step and continue main execution from the invoker step
+**Any json access to a command**.-@< : Execute all the functions with all the commands in the step and start main execution from the first step until it reaches there
+**Any json access to a command**.-@ : Execute all the functions with all the commands in the step and start main execution from the begining
+#The execution of commands happen from top to down specified in the document
+Path symbols:
+:**not developed yet
+
+
+Execution hiearchy:
+step: A step in the execution chain
+function: A separate function that can be called with its contained commands
+command: The command that gets executed at the shell
+#The step and function levels are relative to the command (this means that the outer fields for a command are automatically considered as the corresponding function and step fields)
+
+Execution symbols:
+~| **Any command** |~ : Specifies that the data is an actual command
+
+Variable scope:
+A variable by default is referenced across the functions inside the same step
