@@ -4,7 +4,7 @@
 
 Mairex is an orchestration language that allows you to coordinate AI models, shell commands, and data flows using a JSON-based syntax with specialized operators. It's designed for developers who want to prototype AI workflows and automation scripts.
 
-**⚠️ Alpha Status:** Mairex is in early development (v0.1.0). Expect bugs, missing features, and potential breaking changes in future versions.
+**⚠️ Alpha Status:** Mairex is in early development (v0.9.2). Expect bugs, missing features, and potential breaking changes in future versions.
 
 ## Current Limitations
 
@@ -26,6 +26,7 @@ Mairex lets you write scripts that combine shell commands and AI model calls in 
 - 📦 **Variable Scoping** - Custom and AI-specific variable management
 - 🎯 **JSON-Based Syntax** - Familiar structure with powerful extensions
 - 🛠️ **Shell Integration** - Execute any terminal command with persistent shell sessions
+- 🧩 **Script-Level Arguments** - Pass runtime parameters to scripts from the command line
 
 ## 🚀 Quick Start
 
@@ -144,6 +145,38 @@ Shell commands go between `|> <|`:
 ```
 
 Each array element runs in its own independent shell session.
+
+### Script-Level Arguments
+
+Pass values from the command line into your script using `<ł[N]T>` placeholders:
+
+```bash
+mairex analyze.jsom report.txt llama3
+```
+
+```json
+{
+  "inputs": {
+    "file": ["<ł[0]S>"],
+    "model": ["<ł[1]S>"]
+  },
+  "analyze": {
+    "setup": [
+      "~| MODEL_NAME&V <&=- inputs.model[0].&= |~",
+      "~| A&M <S- MODEL_NAME&V |~"
+    ],
+    "load": [
+      "~| FILE_NAME&V <&=- inputs.file[0].&= |~",
+      "~| FILE_NAME&V -$S> |>cat '<$>'<| -&#> A&I |~"
+    ],
+    "save": [
+      "~| A&O -€S> summary.txt |~"
+    ]
+  }
+}
+```
+
+Place placeholders as normal strings inside the JSON block, then access them inside instructions using standard JSON value access (`.&=`). Supports `S` (String), `I` (Integer), and `L` (List) types.
 
 ## 🎓 Learn More
 

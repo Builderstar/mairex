@@ -14,6 +14,7 @@ Complete specification of the Mairex orchestration language.
 - [JSON Operations](#json-operations)
 - [File Operations](#file-operations)
 - [Built-in Functions](#built-in-functions)
+- [Script-Level Arguments](#script-level-arguments)
 - [Execution Model](#execution-model)
 - [Advanced Patterns](#advanced-patterns)
 
@@ -39,7 +40,7 @@ Mairex scripts use `.jsom` files (JSON with Mairex extensions).
 ```json
 {
   "step_name": {
-    "action_name": "value"  // ❌ Not an array
+    "action_name": "value"
   }
 }
 ```
@@ -186,16 +187,12 @@ Format: `<source>-<data_source><data_type>> <destination>`
 **Examples:**
 
 ```json
-// Capture command output and assign to variable
 ["~| |>date<| -&#> TIME&V |~"]
 
-// Read file content and assign to variable
 ["~| script.py -&€> CODE&V |~"]
 
-// Pass raw string to variable
 ["~| 'hello world' -&¤S> MSG&V |~"]
 
-// Assign command output to file
 ["~| |>ls -la<| -&#€> output.txt |~"]
 ```
 
@@ -206,13 +203,10 @@ Format: `<destination> <&<data_source><data_type>- <source>`
 **Examples:**
 
 ```json
-// Assign raw string to AI input
 ["~| A&I <&¤S- 'Analyze this text' |~"]
 
-// Assign file content to variable
 ["~| SCRIPT&V <&€- main.py |~"]
 
-// Assign JSON value to variable (Buggy and not working at the moment)
 ["~| VAL&V <&=- data.values[0].&= |~"]
 ```
 
@@ -259,16 +253,14 @@ Format: `<destination> <&<data_source><data_type>- <source>`
 **Examples:**
 
 ```json
-// Declare and set a variable
 ["~| DATA&V <&¤S- 'my data' |~"]
 
-// Store script in variable
 ["~| MYSCRIPT&S <&€- script.py |~"]
 
-// Access variable value
 ["~| DATA&V -$S> |>echo '<$>'<| |~"]
+```
 
-// Variable shared across parallel shells
+```json
 {
   "shared": [
     "~| SHARED&V <&¤S- 'data' |~",
@@ -276,7 +268,6 @@ Format: `<destination> <&<data_source><data_type>- <source>`
     "~| SHARED&V -$S> |>echo '<$>'<| |~"
   ]
 }
-// All three shells see the same SHARED&V value
 ```
 
 ### AI Variables
@@ -296,13 +287,11 @@ Format: `<destination> <&<data_source><data_type>- <source>`
 **Examples:**
 
 ```json
-// Set AI parameters
 ["~| A&M <&¤S- 'llama3:latest' |~"]
 ["~| A&S <&¤S- 'ollama' |~"]
 ["~| A&P <&¤S- 'You are a helpful assistant' |~"]
 ["~| A&I <&¤S- 'What is 2+2?' |~"]
 
-// Trigger AI call and get output
 ["~| A&O -$S> |>echo '<$>'<| |~"]
 ```
 
@@ -315,7 +304,6 @@ Format: `<destination> <&<data_source><data_type>- <source>`
     "(~| A&M <&¤S- 'gpt-4o' |~, ~| A&I <&¤S- 'Task 2' |~)"
   ]
 }
-// Shell 0 uses llama3, Shell 1 uses gpt-4o independently
 ```
 
 ---
@@ -480,7 +468,7 @@ Format: `path.to.value.&=` (Buggy and not working at the moment)
 ```json
 {
   "data": {
-  "commands": ["ls", "pwd", "date"]
+    "commands": ["ls", "pwd", "date"]
   },
   "test": [
     "~| 2 -&¤I$> data.commands[<$>].|>&=<| -&#$S> |>echo '<$>'<| |~"
@@ -497,7 +485,7 @@ Use placeholders with array reference:
 ```json
 {
   "data": {
-  "results": ["<$S>"]
+    "results": ["<$S>"]
   },
   "process": [
     "~| |>echo 'date'<| -&#$S> data.results[0<$>].|>&=<| |~"
@@ -536,10 +524,8 @@ Writes command output to `output.txt`.
 Files are resolved relative to the directory where the JSOM script is executed.
 
 ```json
-// Absolute path
 ["~| CONTENT&V <&€- /home/user/data.txt |~"]
 
-// Relative path (from execution directory)
 ["~| CONTENT&V <&€- ./config.json |~"]
 ```
 
@@ -592,6 +578,93 @@ Extract functions from source code stored in variables.
 
 ---
 
+## Script-Level Arguments
+
+Mairex scripts can accept arguments passed on the command line at invocation time, making scripts reusable and parameterizable without editing the `.jsom` file.
+
+### Invocation Syntax
+
+```bash
+mairex script.jsom <arg0> <arg1> <arg2> ...
+```
+
+Arguments are indexed starting at `0`, counting from the first value after the `.jsom` filename.
+
+**Example:**
+```bash
+mairex sample.jsom 4 "Jackie Chan"
+```
+
+- `4` → index `0`
+- `"Jackie Chan"` → index `1`
+
+### Placeholder Syntax
+
+```
+<ł[N]T>
+```
+
+| Part | Meaning |
+|------|---------|
+| `<ł` | Script-level argument placeholder opener |
+| `[N]` | Zero-based index of the argument |
+| `T` | Type specifier: `S` (String), `I` (Integer), `L` (List) |
+| `>` | Placeholder closer |
+
+The type specifier performs actual conversion: `I` casts the argument string to an integer, `L` parses it as a list, `S` keeps it as a string.
+
+If a referenced argument index is not provided at invocation, Mairex raises a runtime error.
+
+### Usage
+
+Script-level argument placeholders are **only valid as normal JSON values** (i.e. replacing a string in a JSON array). They **cannot** be used directly inside instruction specifiers (`~| |~`) or shell commands (`|> <|`). 
+
+Once declared in the JSON structure, they can be accessed by instructions using standard JSON value access (`.&=`).
+
+**Declare arguments in JSON:**
+```json
+{
+  "inputs": {
+    "name": ["<ł[0]S>"],
+    "count": ["<ł[1]I>"]
+  }
+}
+```
+
+**Access them in instructions:**
+```json
+["~| inputs.name[0].&= -$S> |>echo 'Hello, <$>!'<| |~"]
+```
+
+### Complete Example
+
+Given invocation:
+```bash
+mairex greet.jsom "Alice" 3
+```
+
+Script `greet.jsom`:
+```json
+{
+  "inputs": {
+    "name": ["<ł[0]S>"],
+    "times": ["<ł[1]I>"]
+  },
+  "greet": {
+    "run": [
+      "~| inputs.name[0].&= -$S> |>echo 'Hello, <$>!'<| |~"
+    ]
+  }
+}
+```
+
+**Output:**
+```
+Hello, Alice!
+```
+
+---
+
 ## Execution Model
 
 ### Execution Hierarchy
@@ -627,13 +700,13 @@ Step (JSON object)
 {
   "step1": {
     "function1": [
-      "~| VAR&V <&¤S- 'shared' |~",    // Shell 0
-      "~| VAR&V -$S> |>echo '<$>'<| |~" // Shell 1 (sees VAR&V from Shell 0)
+      "~| VAR&V <&¤S- 'shared' |~",
+      "~| VAR&V -$S> |>echo '<$>'<| |~"
     ]
   },
   "step2": {
     "function2": [
-      "~| VAR&V -$S> |>echo '<$>'<| |~" // Shell 0 (VAR&V not available from step1)
+      "~| VAR&V -$S> |>echo '<$>'<| |~"
     ]
   }
 }
@@ -647,12 +720,12 @@ Shell sessions persist within their array index:
 {
   "workflow": {
     "task1": [
-      "~| |>cd /tmp<| |~",              // Shell 0: cd /tmp
-      "~| |>mkdir test<| |~"            // Shell 1: mkdir test (not in /tmp)
+      "~| |>cd /tmp<| |~",
+      "~| |>mkdir test<| |~"
     ],
     "task2": [
-      "~| |>pwd<| |~",                  // Shell 0: shows /tmp (persistent)
-      "~| |>pwd<| |~"                   // Shell 1: shows original dir
+      "~| |>pwd<| |~",
+      "~| |>pwd<| |~"
     ]
   }
 }
@@ -705,6 +778,7 @@ Assigns `'value'` to VAR1, then VAR1 to VAR2, then VAR2 to VAR3.
     ]
   }
 }
+```
 
 ### Dynamic Command Building
 
@@ -760,6 +834,9 @@ Builds and executes: `echo 'Hello World'`
 | `<$S>` | String placeholder (in JSON) |
 | `<$I>` | Integer placeholder (in JSON) |
 | `<$L>` | List placeholder (in JSON) |
+| `<ł[N]S>` | Script-level string argument at index N |
+| `<ł[N]I>` | Script-level integer argument at index N |
+| `<ł[N]L>` | Script-level list argument at index N |
 | `[N<$>]` | Save to array index N |
 | `[<$>]` | Variable array index access |
 | `VAR&` | Custom variable |

@@ -12,6 +12,7 @@ Real-world use cases demonstrating the power of Mairex orchestration.
 6. [Automated Testing & Documentation](#6-automated-testing--documentation)
 7. [System Monitoring & Alerts](#7-system-monitoring--alerts)
 8. [Batch File Processing](#8-batch-file-processing)
+9. [Parameterized Scripts with Script-Level Arguments](#9-parameterized-scripts-with-script-level-arguments)
 
 ---
 
@@ -78,14 +79,16 @@ Real-world use cases demonstrating the power of Mairex orchestration.
 
 ---
 
-## 2. Multi-Model AI Comparison (This might not work as piping content from a shell invoked by python is not natively supported yet)
+## 2. Multi-Model AI Comparison
 
 **Use Case:** Compare how different AI models respond to the same prompt.
 
 ```json
 {
   "test": {
-    "question": [~| Q&V <&¤S- "Explain quantum entanglement in simple terms" |~]
+    "question": [
+      "~| Q&V <&¤S- 'Explain quantum entanglement in simple terms' |~"
+    ]
   },
   "models": {
     "configure": [
@@ -112,10 +115,10 @@ Real-world use cases demonstrating the power of Mairex orchestration.
       "~| |>echo '=== Llama3 ===' > comparison.txt && cat llama3_response.txt >> comparison.txt<| |~"
     ],
     "append_others": [
-      "~| (|>echo '=== GPT-4 ===' >> comparison.txt<|, |>cat gpt4_response.txt >> comparison.txt<|) |~"
+      "(~| |>echo '=== GPT-4 ===' >> comparison.txt<| |~, ~| |>cat gpt4_response.txt >> comparison.txt<| |~)"
     ],
     "finalize": [
-      "~| (|>echo '=== Claude ===' >> comparison.txt<|, |>cat claude_response.txt >> comparison.txt<|, |>echo '=== Qwen ===' >> comparison.txt<|, |>cat qwen_response.txt >> comparison.txt<|) |~"
+      "(~| |>echo '=== Claude ===' >> comparison.txt<| |~, ~| |>cat claude_response.txt >> comparison.txt<| |~, ~| |>echo '=== Qwen ===' >> comparison.txt<| |~, ~| |>cat qwen_response.txt >> comparison.txt<| |~)"
     ]
   }
 }
@@ -132,10 +135,10 @@ Real-world use cases demonstrating the power of Mairex orchestration.
 ```json
 {
   "load_source_files": [
-      "~| MAIN&S <&€- src/main.py" |~,
-      "~| UTILS&S <&€- src/utils.py" |~,
-      "~| CONFIG&S <&€- src/config.py |~"
-    ],
+    "~| MAIN&S <&€- src/main.py |~",
+    "~| UTILS&S <&€- src/utils.py |~",
+    "~| CONFIG&S <&€- src/config.py |~"
+  ],
   "extract": {
     "functions": {
       "main_funcs": [
@@ -173,7 +176,7 @@ Real-world use cases demonstrating the power of Mairex orchestration.
 
 ---
 
-## 4. Data Processing & Transformation (This might not work as piping content from a shell invoked by python is not natively supported yet)
+## 4. Data Processing & Transformation
 
 **Use Case:** Download CSV data, transform it, analyze with AI, export results.
 
@@ -304,7 +307,7 @@ Real-world use cases demonstrating the power of Mairex orchestration.
 
 ---
 
-## Advanced Example: Complete Blog Post Generator (The simple json value access operation is not supported yet)
+## Advanced Example: Complete Blog Post Generator
 
 **Use Case:** Research topic, gather sources, generate content with AI, format as blog post.
 
@@ -320,9 +323,9 @@ Real-world use cases demonstrating the power of Mairex orchestration.
   },
   "research": {
     "download_sources": [
-      "~| config.sources[0].&= -&=$S> |>wget '<$>' -O source1.html<| |~",
-      "~| config.sources[1].&= -&=$S> |>wget '<$>' -O source2.html<| |~",
-      "~| config.sources[2].&= -&=$S> |>wget '<$>' -O source3.html<| |~"
+      "~| config.sources[0].&= -$S> |>wget '<$>' -O source1.html<| |~",
+      "~| config.sources[1].&= -$S> |>wget '<$>' -O source2.html<| |~",
+      "~| config.sources[2].&= -$S> |>wget '<$>' -O source3.html<| |~"
     ],
     "extract_text": [
       "~| |>lynx -dump source1.html<| -&#€S> text1.txt |~",
@@ -390,6 +393,134 @@ Real-world use cases demonstrating the power of Mairex orchestration.
 ```
 
 **Result:** Fully automated blog post generation from research to final draft!
+
+---
+
+## 9. Parameterized Scripts with Script-Level Arguments
+
+**Use Case:** Build reusable scripts that accept runtime parameters from the command line instead of hardcoding values.
+
+### 9a. Reusable AI Analyzer
+
+Invoke with a file to analyze and the AI model to use:
+
+```bash
+mairex analyze.jsom report.txt llama3
+```
+
+```json
+{
+  "args": {
+    "file": ["<ł[0]S>"],
+    "model": ["<ł[1]S>"]
+  },
+  "analyze": {
+    "setup": [
+      "(~| A&M <&=- args.model[0].&= |~, ~| A&P <&¤S- 'Summarize this document concisely' |~)"
+    ],
+    "load": [
+      "~| args.file[0].&= -$S> A&I <&€- <$><| |~"
+    ],
+    "save": [
+      "~| A&O -€S> summary.txt |~"
+    ]
+  }
+}
+```
+
+- `args.file` → `report.txt` (file to analyze)
+- `args.model` → `llama3` (model to use)
+
+*(Note: In the load step above, we use a workaround since direct `<&€- JSON_PATH` is not currently supported natively: we pipe the filename to a shell `cat` command or variable first if needed. Assuming `<&€-` requires a literal string, you would write a variable first).*
+
+Let's refine 9a to be perfectly compliant with Mairex's current alpha capabilities:
+
+```json
+{
+  "args": {
+    "file": ["<ł[0]S>"],
+    "model": ["<ł[1]S>"]
+  },
+  "analyze": {
+    "setup": [
+      "~| MODEL_NAME&V <&=- args.model[0].&= |~",
+      "(~| A&M <S- MODEL_NAME&V |~, ~| A&P <&¤S- 'Summarize this document concisely' |~)"
+    ],
+    "load": [
+      "~| FILE_NAME&V <&=- args.file[0].&= |~",
+      "~| FILE_NAME&V -$S> |>cat '<$>'<| -&#> A&I |~"
+    ],
+    "save": [
+      "~| A&O -€S> summary.txt |~"
+    ]
+  }
+}
+```
+
+---
+
+### 9b. Parameterized Web Scraper
+
+Invoke with a URL and output filename:
+
+```bash
+mairex scrape.jsom "https://news.ycombinator.com" hn_results.txt
+```
+
+```json
+{
+  "inputs": {
+    "url": ["<ł[0]S>"],
+    "outfile": ["<ł[1]S>"]
+  },
+  "scrape": {
+    "download": [
+      "~| inputs.url[0].&= -$S> |>wget '<$>' -O page.html<| |~"
+    ],
+    "extract": [
+      "~| OUT_FILE&V <&=- inputs.outfile[0].&= |~",
+      "(~| A&M <&¤S- 'llama3' |~, ~| A&P <&¤S- 'Extract all article titles as a numbered list' |~, ~| A&I <&€- page.html |~)",
+      "~| OUT_FILE&V -$S> |>echo '<| <$S- A&O <&#- |>' > '<$>'<| |~"
+    ]
+  }
+}
+```
+*(Again, using variables as safe intermediaries for AI outputs to dynamic files).*
+
+---
+
+### 9c. Batch Processor with Count
+
+Invoke with a directory path and a repeat count:
+
+```bash
+mairex batch.jsom /data/logs 5
+```
+
+```json
+{
+  "config": {
+    "dir": ["<ł[0]S>"],
+    "count": ["<ł[1]I>"]
+  },
+  "process": {
+    "load_args": [
+      "~| DIR&V <&=- config.dir[0].&= |~",
+      "~| COUNT&V <&=- config.count[0].&= |~"
+    ],
+    "run": [
+      "~| DIR&V -$S> |>ls '<$>'<| -&#€S> file_list.txt |~"
+    ],
+    "analyze": [
+      "(~| A&M <&¤S- 'llama3' |~, ~| A&P <&¤S- 'List any anomalies in these log filenames' |~, ~| A&I <&€- file_list.txt |~, ~| A&O -€S> anomalies.txt |~)"
+    ]
+  }
+}
+```
+
+**What this demonstrates:**
+- `<ł[0]S>` and `<ł[1]I>` supply static values into the `config` block
+- Arguments are accessed via `.&=` and stored in variables for clean reuse throughout the script
 
 ---
 

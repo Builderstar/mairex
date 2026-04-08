@@ -5,6 +5,7 @@ import re
 import copy
 import ast
 import ollama
+import variable_handle
 from pathlib import Path
 from shell import Shell
 from function_extractor import extract_functions
@@ -33,11 +34,23 @@ def data_syntax(data):
 		raise SyntaxError(f'Unfinished passable data specifier in {data}')
 	elif '<' not in data and '$' in data and '>' in data:
 		raise SyntaxError(f'Unstarted passable data specifier in {data}')
+	elif '<ł>' in data:
+		raise SyntaxError(f'The <ł> symbol is reserved for script level input data specifiers in {data}. If your json data contains this exact string please modify it.')
+	elif '<ł' in data and '>' not in data:
+		raise SyntaxError(f"Unfinished script level input data in {data}")
+	elif '<' not in data and 'ł' in data and '>' in data:
+		raise SyntaxError(f"Unstarted script level input data in {data}")
+	elif 'ł' in data and '[' not in data and ']' not in data:
+		raise SyntaxError(f"The argument id position must be specified when passing script level input data in {data}")
+	elif 'ł' in data and '[' in data and ']' not in data:
+		raise SyntaxError(f"Unfinished input data argument specifier in {data}")
+	elif 'ł' in data and '[' not in data and ']' in data:
+		raise SyntaxError(f"Unstarted input data argument specifier in {data}")
 	elif ('&I' in data or '&O' in data or '&D' in data or '&M' in data or '&P' in data or '&S' in data or '&F' in data or '&J' in data or '&V' in data or '&P' in data) and ';' not in data:
 		raise SyntaxError(f'Storing variable references as plain json values in {data} is not currently supported.')
 	elif '&D' in data and 'ˇ' not in data:
 		raise SyntaxError(f"At least two options with an 'or: ˇ' statement has to be specified in {data} for execution assignment")
-	elif '&' in data or '<$' in data:
+	elif '&' in data or '<$' in data or '<ł' in data:
 		return data
 		
 def specifier_syntax(data):
@@ -112,6 +125,14 @@ def json_data_value_access_syntax(command, assigner):
 	elif '¤' in assigner:
 		raise RuntimeError(f"Assigning raw value with a json_value reference is not supported at {command} from {assigner}")
 
+def json_data_value_assign_syntax(command, assigner):
+	if command.count('&=') > 1:
+		raise RuntimeError(f"Only one value access can be specified at {command} from {assigner}")
+	elif '&=' in command and '.&=' not in command:
+		raise SyntaxError(f"Referencing a json data value in an intruction should follow the standard json access syntax at {command} from {assigner}")
+	elif '&=.' in command:
+		raise RuntimeError(f"Further json access of a json data value is prohibited at {command} from {assigner}")
+
 def json_parallel_value_call_syntax(data):
 	if '(' in data and ')' not in data:
 		raise SyntaxError(f"Unfinished '(' parallel json data access specifier in {data}")
@@ -148,11 +169,13 @@ def custom_variable_syntax(variable):
 	elif '|>' in variable or '<|' in variable:
 		raise RuntimeError(f"A variable reference can't be ran as a command in {variable}")
 
-def json_value_assign_syntax(command, assigner):
-	if '=' not in assigner:
-		raise RuntimeError(f'Assigning json_value from instruction has to contain the base symbol for json access in {assigner} with {command}')
-	elif '&€' in assigner or '&#' in assigner:
+def json_value_assigner_syntax(command, assigner):
+	if '€' in assigner or '#' in assigner:
 		raise RuntimeError(f'Content and command output reference is not possible from a plain json access at {command} with {assigner}')
+	elif '¤' in assigner:
+		raise RuntimeError(f'Assigning a raw value containing a json value reference is not possible at {command} with {assigner}')
+	elif '&' in assigner:
+		raise RuntimeError(f"The json access already contains a reference at {command} a reference can't be reference further via {assigner}")
 
 def variable_value_access_syntax(command, assigner):
 	if '&' in assigner:
@@ -231,6 +254,23 @@ def ai_model_syntax(set_model, set_provider):
 	elif not api_keys:
 		raise RuntimeError(f"The api keys hasn't been loaded so using non ollama models is not possible")
 
+def script_input_variable_syntax(data):
+	if 'I' not in data and 'S' not in data and 'L' not in data:
+		raise SyntaxError(f"Unsupported data type at {data}")
+
+def script_input_variable_access_syntax(data, argv):
+	ida = None
+	
+	try:
+		ida = int(data[data.index('[')+1:data.index(']')]) + 2
+	except:
+		raise RuntimeError(f"The provided script level input data id specifier was an invalid integer in {data}")
+	
+	if ida >= len(argv):
+		raise RuntimeError(f"A script level input data wasn't provided at the appropriate argument place in {data}")
+	
+	return ida	
+
 def path_strip(path):
 	path = path.split('.')
 	del path[0]
@@ -238,24 +278,51 @@ def path_strip(path):
 	return path
 	
 def method_value_extract(method, path):
-		instruction = method.split(';')
-		method_entry = instruction[0].strip()
-		function_to_extract = instruction[1].strip()
-		variable = method_entry.split('&')[0] + '&S'
-		script = variable_value_extract(variable, path)
-		function_value = extract_functions(script, function_to_extract)
-		path = path_strip(path)
-		save_json_value_to_path(json, path, function_value)
-		
+	instruction = method.split(';')
+	method_entry = instruction[0].strip()
+	function_to_extract = instruction[1].strip()
+	variable = method_entry.split('&')[0] + '&S'
+	script = variable_value_extract(variable, path)
+	function_value = extract_functions(script, function_to_extract)
+	path = path_strip(path)
+	save_json_value_to_path(json, path, function_value)
+
+def command_with_reference_extract(commands):
+	json_commands = []
+	for i in range(len(commands)):
+		if '<$>' in commands[i]:
+			json_commands.append(commands[i].replace('<$>', ''))
+	return json_commands
+
+def json_commands_extract(command):
+	if '(>' not in command and '<)' not in command:
+		json_commands = command.replace('<$>', '')
+	else:
+		command = command.strip().removeprefix("(>").removesuffix("<)")
+		commands = re.findall(r'(?:[^,\[\]|]+|\[[^\]]*\]|\|>[^<]*<\|)+', command, re.DOTALL)
+		json_commands = command_with_reference_extract(commands)
+	return json_commands
+
+def json_command_operations(json_command, input_value, command, assigner):
+	json_value = json_data_value_extract(json_command)
+	reference_variable_assign_type_syntax(input_value, json_value, command, assigner)
+	json_data_value_save(json_command, input_value)
+
+def json_commands_extractor(json_commands, input_value, command, assigner):
+	if isinstance(json_commands, list):
+		for json_command in json_commands:
+			json_command_operations(json_command, input_value, command, assigner)
+	elif isinstance(json_commands, str):
+		json_command_operations(json_commands, input_value, command, assigner)
+	else:
+		raise AttributeError(f"Something went horribly wrong with {json_commands} that was passed as an invalid instruction to this function")
 		
 def reference_variable_place_holder_assign(command, assigner, input_value):
 	if '<$>]' in command and '[<$>]' not in command:
 		input_value = value_convert(input_value, assigner)
-		basic_command = command.replace('<$>', '')
-		json_value = json_data_value_extract(basic_command)
-		reference_variable_assign_type_syntax(input_value, json_value, command, assigner)
-		json_data_value_save(basic_command, input_value)
-		command = basic_command
+		json_commands = json_commands_extract(command)
+		json_commands_extractor(json_commands, input_value, command, assigner)
+		command = command.replace('<$>', '')
 		return command
 		
 	else:
@@ -273,192 +340,30 @@ def json_data_value_access_multiple_commands(commands, assigner, json_values):
 
 def multiple_command_extract(command):
 	command = command.strip().removeprefix("(>").removesuffix("<)")
-	commands = command.strip().split(',')
+	commands = re.findall(r'(?:\|>.*?<\||[^,\s])+', command, re.DOTALL)
 	return commands
 
-def recursive_variable_save(outer, dict_var, ide, path, variable_name, variable_entry, input_value, ai, par_id):
-	found, key = False, None
-	for key, value in dict_var.items():
-		if path[ide] in key:
-			for k in range(len(value[1])):
-				for declared_variable, entries in value[1][k].items():
-					if variable_name in declared_variable:
-						if not ai:
-							for entry, var_value in entries.items():
-								if variable_entry in entry:
-									found = True
-									access = []
-									for val in outer:
-										access.append(val)
-										access.append(0)
-									if key == 'json':
-										access = [key, 1, k, declared_variable, entry]	
-									else:
-										access = access + [key, 1, k, declared_variable, entry]
-									data = variables
-									for accessor in access[:-1]:
-										data = data[accessor]
-									data[access[-1]] = input_value
-						else:
-							for id_par, ai_entries in entries.items():
-								if id_par == par_id:
-									for entry, var_value in ai_entries.items():
-										if variable_entry in entry:
-											found = True
-											access = []
-											for val in outer:
-												access.append(val)
-												access.append(0)
-											if key == 'json':
-												access = [key, 1, k, declared_variable, par_id, entry]	
-											else:
-												access = access + [key, 1, k, declared_variable, par_id, entry]
-											data = variables
-											for accessor in access[:-1]:
-												data = data[accessor]
-											data[access[-1]] = input_value
-										
-								else:
-									pass
-			break
-	
-	if key != outer[ide - 1]:
-		outer.append(key)
-	
-	if path[ide] != key:
-		route = path[path.index(path[ide]):]
-		route = list(reversed(route))
-		if not ai:
-			dict_loc = {route[0]: [{}, [{variable_name : {variable_entry : input_value}}]]}
-		else:
-			dict_loc = {route[0]: [{}, [{variable_name : {par_id : {variable_entry : input_value}}}]]}
-		
-		if len(route) > 1:
-			for d in range(len(route) - 1):
-				if d == 0:
-					continue
-				else:
-					dict_loc = {route[d] : [dict_loc, []]}
-		
-			dict_var[route[-1]] = [dict_loc, []]
-		elif len(route) == 1 and not ai:
-			variables['json'][0][route[0]] = [{}, [{variable_name : {variable_entry : input_value}}]]
-		
-		elif len(route) == 1 and ai:
-			variables['json'][0][route[0]] = [{}, [{variable_name : {par_id : {variable_entry : input_value}}}]]
-		
-		elif not ai:
-			variables['json'][1] = {variable_name : {variable_entry : input_value}}
-		
-		else:
-			variables['json'][1] = {variable_name : {par_id : {variable_entry : input_value}}}
-		
-		return None
-	
-	if not found and ide + 1 >= len(path):
-		foundy = False
-		for item in dict_var[path[ide]][1]:
-			if variable_name in item and not ai:
-				item[variable_name][variable_entry] = input_value
-				foundy = True
-				break
-			elif variable_name in item and ai:
-				if par_id in item[variable_name]:
-					item[variable_name][par_id][variable_entry] = input_value
-				else:
-					item[variable_name][par_id] = {variable_entry : input_value}
-		if not foundy and not ai:
-			dict_var[path[ide]][1].append({variable_name : {variable_entry : input_value}})
-		
-		return None
-	
-	elif not found:
-		ide += 1
-		recursive_variable_save(outer, dict_var[outer[ide - 1]][0], ide, path, variable_name, variable_entry, input_value, ai, par_id)
-		
-def recursive_variable_lookup(variable_name, variable_entry, path, dict_var, ide, ai):
-	json_value = None
-	if ide + 1 >= len(path) and ai and int(path[-1]) in variables[path[0]][1][0][variable_name]:
-		if variable_entry in variables[path[0]][1][0][variable_name][int(path[-1])]:
-			json_value = variables[path[0]][1][0][variable_name][int(path[-1])][variable_entry]
-			return json_value
-		else:
-			json_value = variables[path[0]][1][0][variable_name][variable_entry]
-			return json_value
-		
-		return json_value
-	
-	elif ide + 1 >= len(path) and ai:
-		json_value = variables[path[0]][1][0][variable_name][variable_entry]
-		return json_value
-	elif ide + 1 >= len(path):
-		
-		for elements in variables[path[0]][1]:
-			to_value = elements.copy()
-			for key in [variable_name, variable_entry]:
-				if isinstance(to_value, dict) and key in to_value:
-					to_value = to_value[key]
-				else:
-					to_value = False
-					break
-			if to_value:
-				json_value = to_value
-				return json_value
-		return json_value
-		
-	if path[ide] in dict_var:
-		for elements in dict_var[path[ide]][1]:
-			to_value = elements.copy()
-			if ai:
-				to_path = [variable_name, int(path[-1]), variable_entry]
-			else:
-				to_path = [variable_name, variable_entry]
-			
-			for key in to_path:
-				if isinstance(to_value, dict) and key in to_value:                                                        
-					to_value = to_value[key]                                                                            
-				else:  
-					to_value = False                                                                                      
-					break                                            
-				
-			if to_value:
-				json_value = to_value
-				return json_value
-		ide += 1
-		json_value = recursive_variable_lookup(variable_name, variable_entry, path, dict_var[path[ide-1]][0], ide, ai)
-		return json_value
-			
-	elif ai and int(path[-1]) in variables[path[0]][1][0][variable_name]:
-		if variable_entry in variables[path[0]][1][0][variable_name][int(path[-1])]:
-			json_value = variables[path[0]][1][0][variable_name][int(path[-1])][variable_entry]
-			return json_value
-		else:
-			json_value = variables[path[0]][1][0][variable_name][variable_entry]
-			return json_value
-	elif ai:
-		json_value = variables[path[0]][1][0][variable_name][variable_entry]
-		return json_value
-	
-	else:
-		return json_value
-
 def custom_variable_assign(variable, path, input_value):
+	global variables
 	ai, par_id = False, None
+	var_type = 'custom'
 	path = path.split('.')[:-2]
 	variable_name = variable.split('&')[0].strip()
 	variable_entry = variable.split('&')[1].strip()
-	recursive_variable_save(['json'], variables, 0, path, variable_name, variable_entry, input_value, ai, par_id)
-
+	variables = variable_handle.Save(['json'], variables, 0, path, variable_name, variable_entry, input_value, var_type, par_id, variables)
+	
 def ai_variable_assign(variable, path, input_value):
+	global variables
 	ai = True
+	var_type = 'ai'
 	par_id = int(path.split('.')[-1])
 	path = path.split('.')[:-2]
 	variable_name = variable.split('&')[0].strip()
 	variable_entry = variable.split('&')[1].strip()
-	recursive_variable_save(['json'], variables, 0, path, variable_name, variable_entry, input_value, ai, par_id)
+	variables = variable_handle.Save(['json'], variables, 0, path, variable_name, variable_entry, input_value, var_type, par_id, variables)
 
 def ai_variable_value_extract(variable, path):
-	ai = True
+	var_type = 'ai'
 	original_path = path
 	path = path.split('.')
 	variable_name = variable.split('&')[0].strip()
@@ -466,27 +371,25 @@ def ai_variable_value_extract(variable, path):
 	del path[-2]
 	
 	if 'O' not in variable and 'D' not in variable:
-		ai_var_value = recursive_variable_lookup(variable_name, variable_entry, path, variables, 0, ai)
+		ai_var_value = variable_handle.Load(variables, variable_name, variable_entry, path, variables, 0, var_type)
 		return ai_var_value
 		
 	else:
 		variable_entries = ['M', 'I', 'P', 'S']
 		ai_call_values = {}
 		for entry in variable_entries:
-			ai_call_values[entry] = recursive_variable_lookup(variable_name, entry, path, variables, 0, ai)
+			ai_call_values[entry] = variable_handle.Load(variables, variable_name, entry, path, variables, 0, var_type)
 		ai_output = AI_Call(ai_call_values, original_path)
 		ai_var_value = ai_output[variable_entry]
 		return ai_var_value
 	
-	
-
 def variable_value_extract(variable, path):
-	ai = False
+	var_type = 'custom'
 	path = path.split('.')
 	variable_name = variable.split('&')[0].strip()
 	variable_entry = variable.split('&')[1].strip()
 	del path[-2]
-	var_value = recursive_variable_lookup(variable_name, variable_entry, path, variables, 0, ai)
+	var_value = variable_handle.Load(variables, variable_name, variable_entry, path, variables, 0, var_type)
 	return var_value
 
 def json_parallel_value_call_extract(data):
@@ -640,7 +543,8 @@ def commander_exec(command, assigner, path):
 		output_value = variable_value_extract(command, path)
 		return output_value
 	elif '&=' in command and '|>' not in command and '<|' not in command:
-		json_value_assign_syntax(command, assigner)
+		json_value_assigner_syntax(command, assigner)
+		json_value = json_data_value_extract(command)
 		output_value = json_value
 		return output_value	
 	elif '€' in assigner and '¤' not in assigner and command.count('.') == 1 and "'" not in command and '"' not in command and '. ' not in command and ' .' not in command:
@@ -670,10 +574,12 @@ def commanded_exec(command, assigner, input_value, path):
 	elif '<$>' in command:
 		command = reference_variable_place_holder_assign(command, assigner, input_value)
 		command_exec(command, '#', path, json_value, json_values, commands)
-	
+	elif '&=' in command and '|>' not in command and '<|' not in command:
+		json_data_value_assign_syntax(command, assigner)
+		json_data_value_save(command, input_value)
 	elif '€' in assigner and '&' not in command and command.count('.') == 1 and "'" not in command and '"' not in command and '. ' not in command and ' .' not in command:
-		 file_value_save_syntax(command, assigner)
-		 file_value_save(command, input_value)
+		file_value_save_syntax(command, assigner)
+		file_value_save(command, input_value)
 	
 	return command
 
@@ -691,9 +597,18 @@ def command_line_stripper(data):
 		return None
 	return commands
 
+def script_input_variable_save(data, key, argv):
+	ida = script_input_variable_access_syntax(data, argv)
+	value_convert(argv[ida], data)
+	json_path = key.removeprefix('json.')
+	json_data_value_save(json_path, argv[ida])
+
 def data_stripper(data, key):
 	if '<$' in data and '>' in data:
 		json_variable_syntax(data)
+	elif '<ł' in data and '>' in data:
+		script_input_variable_syntax(data)
+		script_input_variable_save(data, key, sys.argv)
 	elif '&' in data and ';' in data:
 		method_place_holder_syntax(data)
 		method_value_extract(data, key)
@@ -733,7 +648,7 @@ def command_stripper(command, path):
 		command_exec(command, '#', path, json_value, json_values, commands)
 
 def json_data_remover(data):
-	not_command = specifier_syntax(data)
+	not_command = specifier_syntax(str(data))
 	if not_command:
 		special_value = data_syntax(not_command)
 		return special_value
@@ -814,7 +729,7 @@ def Script_Load(arg):
 def Instruction_Extract(data):
 	for dictionary in data:
 		for key, value in dictionary.items():
-			commands = command_line_stripper(value)
+			commands = command_line_stripper(str(value))
 			if commands:
 				for command in commands:
 					command_stripper(command, key)

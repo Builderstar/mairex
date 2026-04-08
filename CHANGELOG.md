@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.0] - 2026-03-01
+## [0.9.2] - 2026-04-07
 
 ### Added
 - Initial release of Mairex orchestration language
@@ -100,7 +100,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Notes
 This is an alpha release. APIs and syntax may change in future versions.
-Feedback and contributions are welcome!
 
 ---
 

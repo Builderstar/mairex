@@ -87,7 +87,7 @@ Create `sequence.jsom`:
 {
   "workflow": {
     "navigate": [
-      "~| (|>cd /tmp<|, |>pwd<|, |>ls<|) |~"
+      "(~| |>cd /tmp<| |~, ~| |>pwd<| |~, ~| |>ls<| |~)"
     ]
   }
 }
@@ -627,8 +627,8 @@ Create `extract_func.jsom`:
       "MYSCRIPT&F ; farewell()"
     ],
     "show": [
-      "~| (> |>echo '<|, scripts.functions[1].|>&=<|, |>'<| <) |~",
-      "~| (> |>echo '<|, scripts.functions[2].|>&=<|, |>'<| <) |~"
+      "~| (> |>echo<|, scripts.functions[1].|>&=<| <) |~",
+      "~| (> |>echo<|, scripts.functions[2].|>&=<| <) |~"
     ]
   }
 }
@@ -680,6 +680,136 @@ Create `full_pipeline.jsom`:
 **Real-world use case!**
 
 ---
+
+## Chapter 8: Script-Level Arguments
+
+Scripts become far more reusable when they can accept values from the command line at invocation time, instead of having those values hardcoded inside the `.jsom` file.
+
+### Lesson 8.1: Passing Arguments to a Script
+
+Arguments are supplied after the `.jsom` filename and are zero-indexed from that point:
+
+```bash
+mairex script.jsom <arg0> <arg1> ...
+```
+
+Inside the script, place the `<ł[N]T>` placeholder as a normal JSON string value. You cannot put these placeholders directly inside instruction specifiers (`~| |~`). Instead, access them using standard JSON value access (`.&=`).
+
+Create `greet.jsom`:
+
+```json
+{
+  "args": {
+    "name": ["<ł[0]S>"]
+  },
+  "greet": {
+    "say_hello": [
+      "~| args.name[0].&= -$S> |>echo 'Hello, <$>!'<| |~"
+    ]
+  }
+}
+```
+
+Run it:
+```bash
+mairex greet.jsom Alice
+```
+
+**Output:** `Hello, Alice!`
+
+**Key concept:** `<ł[0]S>` sits safely outside the instruction engine as a normal JSON value. At runtime, Mairex replaces it with the first argument (`Alice`). You then read it into the instruction using `args.name[0].&=`.
+
+---
+
+### Lesson 8.2: Multiple Arguments and Types
+
+Create `compute.jsom`:
+
+```json
+{
+  "inputs": {
+    "a": ["<ł[0]I>"],
+    "b": ["<ł[1]I>"]
+  },
+  "math": {
+    "run": [
+      "~| inputs.a[0].&= -$I> |>echo '<$>'<| |~",
+      "~| inputs.b[0].&= -$I> |>echo '<$>'<| |~"
+    ]
+  }
+}
+```
+
+Run it:
+```bash
+mairex compute.jsom 6 7
+```
+
+**Output:**
+```
+6
+7
+```
+
+**Breakdown:**
+- `inputs.a[0]` captures `6` (cast to integer)
+- `inputs.b[0]` captures `7` (cast to integer)
+- The values are then accessed via `.&=` and passed into shell commands
+
+---
+
+### Lesson 8.3: Storing Arguments in Variables
+
+Arguments can be assigned to Mairex variables for cleaner reuse across multiple instructions:
+
+Create `pipeline.jsom`:
+
+```json
+{
+  "config": {
+    "url": ["<ł[0]S>"]
+  },
+  "setup": {
+    "load_args": [
+      "~| TARGET&V <&=- config.url[0].&= |~"
+    ]
+  },
+  "run": {
+    "download": [
+      "~| TARGET&V -$S> |>wget '<$>' -O page.html<| |~"
+    ],
+    "analyze": [
+      "(~| A&P <&¤S- 'Summarize this page' |~, ~| A&I <&€- page.html |~, ~| A&O -€S> summary.txt |~)"
+    ]
+  }
+}
+```
+
+Run it:
+```bash
+mairex pipeline.jsom "https://example.com"
+```
+
+**What happened:**
+1. `<ł[0]S>` captures the URL from the command line into the `config` JSON object
+2. `TARGET&V` loads the value using `<&=-` (JSON value assignment)
+3. Used in the `wget` command via the variable
+
+---
+
+### Lesson 8.4: Missing Arguments
+
+If a placeholder references an index that was not supplied, Mairex raises a runtime error:
+
+```bash
+mairex greet.jsom
+# RuntimeError: Missing script argument at index 0
+```
+
+Always ensure your invocation supplies all required arguments.
+
+---
+
 ## Next Steps
 
 You've completed the tutorial! You now understand:
@@ -691,6 +821,7 @@ You've completed the tutorial! You now understand:
 - ✅ JSON data access
 - ✅ AI model integration
 - ✅ Advanced patterns
+- ✅ Script-level arguments
 
 ### Continue Learning:
 - **[SYNTAX_REFERENCE.md](SYNTAX_REFERENCE.md)** - Complete language specification

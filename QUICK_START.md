@@ -55,7 +55,34 @@ Store and reuse data:
 }
 ```
 
-### 3. AI Integration
+### 3. Script-Level Arguments
+
+Pass values from the command line at invocation:
+
+```bash
+mairex script.jsom "Alice" 42
+```
+
+```json
+{
+  "args": {
+    "name": ["<ł[0]S>"],
+    "age": ["<ł[1]I>"]
+  },
+  "demo": {
+    "run": [
+      "~| args.name[0].&= -$S> |>echo 'Hello, <$>!'<| |~",
+      "~| args.age[0].&= -$I> |>echo 'Age: <$>'<| |~"
+    ]
+  }
+}
+```
+
+- `<ł[0]S>` → first argument, parsed as string
+- `<ł[1]I>` → second argument, parsed as integer
+- Arguments act as static JSON values, read into instructions via `.&=`
+
+### 4. AI Integration
 
 Call AI models:
 
