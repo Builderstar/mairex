@@ -5,10 +5,10 @@ import re
 import copy
 import ast
 import ollama
-from . import variable_handle
+import variable_handle
 from pathlib import Path
-from .shell import Shell
-from .function_extractor import extract_functions
+from shell import Shell
+from function_extractor import extract_functions
 from litellm import completion
 	
 def command_syntax(data):
