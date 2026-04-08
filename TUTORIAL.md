@@ -771,7 +771,7 @@ Create `pipeline.jsom`:
   },
   "setup": {
     "load_args": [
-      "~| TARGET&V <&=- config.url[0].&= |~"
+      "~| TARGET&V <S- config.url[0].&= |~"
     ]
   },
   "run": {
@@ -792,7 +792,7 @@ mairex pipeline.jsom "https://example.com"
 
 **What happened:**
 1. `<ł[0]S>` captures the URL from the command line into the `config` JSON object
-2. `TARGET&V` loads the value using `<&=-` (JSON value assignment)
+2. `TARGET&V` loads the value using `<S-` (String value type assignment)
 3. Used in the `wget` command via the variable
 
 ---

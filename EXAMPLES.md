@@ -400,7 +400,7 @@ Real-world use cases demonstrating the power of Mairex orchestration.
 
 **Use Case:** Build reusable scripts that accept runtime parameters from the command line instead of hardcoding values.
 
-### 9a. Reusable AI Analyzer
+### Reusable AI Analyzer
 
 Invoke with a file to analyze and the AI model to use:
 
@@ -416,10 +416,10 @@ mairex analyze.jsom report.txt llama3
   },
   "analyze": {
     "setup": [
-      "(~| A&M <&=- args.model[0].&= |~, ~| A&P <&¤S- 'Summarize this document concisely' |~)"
+      "(~| A&M <S- args.model[0].&= |~, ~| A&P <&¤S- 'Summarize this document concisely' |~)"
     ],
     "load": [
-      "~| args.file[0].&= -$S> A&I <&€- <$><| |~"
+      "~| (> |>echo<|, args.file[0].|>&=<| <) -&#S> A&I |~"
     ],
     "save": [
       "~| A&O -€S> summary.txt |~"
@@ -430,99 +430,6 @@ mairex analyze.jsom report.txt llama3
 
 - `args.file` → `report.txt` (file to analyze)
 - `args.model` → `llama3` (model to use)
-
-*(Note: In the load step above, we use a workaround since direct `<&€- JSON_PATH` is not currently supported natively: we pipe the filename to a shell `cat` command or variable first if needed. Assuming `<&€-` requires a literal string, you would write a variable first).*
-
-Let's refine 9a to be perfectly compliant with Mairex's current alpha capabilities:
-
-```json
-{
-  "args": {
-    "file": ["<ł[0]S>"],
-    "model": ["<ł[1]S>"]
-  },
-  "analyze": {
-    "setup": [
-      "~| MODEL_NAME&V <&=- args.model[0].&= |~",
-      "(~| A&M <S- MODEL_NAME&V |~, ~| A&P <&¤S- 'Summarize this document concisely' |~)"
-    ],
-    "load": [
-      "~| FILE_NAME&V <&=- args.file[0].&= |~",
-      "~| FILE_NAME&V -$S> |>cat '<$>'<| -&#> A&I |~"
-    ],
-    "save": [
-      "~| A&O -€S> summary.txt |~"
-    ]
-  }
-}
-```
-
----
-
-### 9b. Parameterized Web Scraper
-
-Invoke with a URL and output filename:
-
-```bash
-mairex scrape.jsom "https://news.ycombinator.com" hn_results.txt
-```
-
-```json
-{
-  "inputs": {
-    "url": ["<ł[0]S>"],
-    "outfile": ["<ł[1]S>"]
-  },
-  "scrape": {
-    "download": [
-      "~| inputs.url[0].&= -$S> |>wget '<$>' -O page.html<| |~"
-    ],
-    "extract": [
-      "~| OUT_FILE&V <&=- inputs.outfile[0].&= |~",
-      "(~| A&M <&¤S- 'llama3' |~, ~| A&P <&¤S- 'Extract all article titles as a numbered list' |~, ~| A&I <&€- page.html |~)",
-      "~| OUT_FILE&V -$S> |>echo '<| <$S- A&O <&#- |>' > '<$>'<| |~"
-    ]
-  }
-}
-```
-*(Again, using variables as safe intermediaries for AI outputs to dynamic files).*
-
----
-
-### 9c. Batch Processor with Count
-
-Invoke with a directory path and a repeat count:
-
-```bash
-mairex batch.jsom /data/logs 5
-```
-
-```json
-{
-  "config": {
-    "dir": ["<ł[0]S>"],
-    "count": ["<ł[1]I>"]
-  },
-  "process": {
-    "load_args": [
-      "~| DIR&V <&=- config.dir[0].&= |~",
-      "~| COUNT&V <&=- config.count[0].&= |~"
-    ],
-    "run": [
-      "~| DIR&V -$S> |>ls '<$>'<| -&#€S> file_list.txt |~"
-    ],
-    "analyze": [
-      "(~| A&M <&¤S- 'llama3' |~, ~| A&P <&¤S- 'List any anomalies in these log filenames' |~, ~| A&I <&€- file_list.txt |~, ~| A&O -€S> anomalies.txt |~)"
-    ]
-  }
-}
-```
-
-**What this demonstrates:**
-- `<ł[0]S>` and `<ł[1]I>` supply static values into the `config` block
-- Arguments are accessed via `.&=` and stored in variables for clean reuse throughout the script
-
----
 
 ## Tips for Complex Workflows
 
