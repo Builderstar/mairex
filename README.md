@@ -162,11 +162,11 @@ mairex analyze.jsom report.txt llama3
   },
   "analyze": {
     "setup": [
-      "~| MODEL_NAME&V <&=- inputs.model[0].&= |~",
+      "~| MODEL_NAME&V <S- inputs.model[0].&= |~",
       "~| A&M <S- MODEL_NAME&V |~"
     ],
     "load": [
-      "~| FILE_NAME&V <&=- inputs.file[0].&= |~",
+      "~| FILE_NAME&V <S- inputs.file[0].&= |~",
       "~| FILE_NAME&V -$S> |>cat '<$>'<| -&#> A&I |~"
     ],
     "save": [
