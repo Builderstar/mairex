@@ -134,7 +134,7 @@ def print_version():
     try:
         from mairex import __version__
     except ImportError:
-        __version__ = "0.9.4-dev"
+        __version__ = "0.9.5-dev"
 
     print(f"Mairex version {__version__}")
 
